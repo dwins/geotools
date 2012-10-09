@@ -18,6 +18,7 @@ package org.geotools.data.oracle;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -82,19 +83,35 @@ public class OracleFilterToSQL extends PreparedFilterToSQL {
     private static final Logger LOGGER = org.geotools.util.logging.Logging.getLogger(
             "org.geotools.filter.SQLEncoderOracle");
 
-    /** Contains filter type to SDO_RELATE mask type mappings */
-    private static final Map<Class, String> SDO_RELATE_MASK_MAP = new HashMap<Class, String>() {
-        {
-            put(Contains.class, "contains");
-            put(Crosses.class, "overlapbdydisjoint");
-            put(Equals.class, "equal");
-            put(Overlaps.class, "overlapbdyintersect");
-            put(Touches.class, "touch");
-            put(Within.class, "inside");
-            put(Disjoint.class, "disjoint");
-            put(BBOX.class, "anyinteract");
-            put(Intersects.class, "anyinteract");
-        }
+//    /** Contains filter type to SDO_RELATE mask type mappings */
+//    private static final Map<Class, String> SDO_RELATE_MASK_MAP = new HashMap<Class, String>() {
+//        {
+//            put(Contains.class, "contains");
+//            put(Crosses.class, "overlapbdydisjoint");
+//            put(Equals.class, "equal");
+//            put(Overlaps.class, "overlapbdyintersect");
+//            put(Touches.class, "touch");
+//            put(Within.class, "inside");
+//            put(Disjoint.class, "disjoint");
+//            put(BBOX.class, "anyinteract");
+//            put(Intersects.class, "anyinteract");
+//        }
+//    };
+
+    /** Contains filter type to Oracle function name mappings */
+    private static final Map<Class<?>, String> SDO_OPERATOR_MAP;
+    static { 
+    	Map<Class<?>, String> temp = new HashMap<Class<?>, String>();
+        temp.put(Contains.class, "SDO_CONTAINS");
+        temp.put(Crosses.class, "SDO_OVERLAPBDYDISJOINT");
+        temp.put(Equals.class, "SDO_EQUAL");
+        temp.put(Overlaps.class, "SDO_OVERLAPBDYINTERSECT");
+        temp.put(Touches.class, "SDO_TOUCH");
+        temp.put(Within.class, "SDO_INSIDE");
+        temp.put(Disjoint.class, "SDO_ANYINTERACT");
+        temp.put(BBOX.class, "SDO_ANYINTERACT");
+        temp.put(Intersects.class, "SDO_ANYINTERACT");
+        SDO_OPERATOR_MAP = Collections.unmodifiableMap(temp);
     };
     
     /**
@@ -106,19 +123,21 @@ public class OracleFilterToSQL extends PreparedFilterToSQL {
      * If we have to turn <code>a op b</code> into <code>b op2 a</code>, what's the op2 that returns
      * the same result?
      */
-    private static final Map<String, String> INVERSE_OPERATOR_MAP = new HashMap<String, String>() {
-        {
-            // asymmetric operators, op2 = !op
-            put("contains", "inside");
-            put("inside", "contains");
-            // symmetric operators, op2 = op
-            put("overlapbdydisjoint", "overlapbdydisjoint");
-            put("overlapbdyintersect", "overlapbdyintersect");
-            put("touch", "touch");
-            put("equal", "equal");
-            put("anyinteract", "anyinteract");
-            put("disjoint", "disjoint");
-        }
+    private static final Map<Class<?>, String> INVERSE_OPERATOR_MAP ;
+    static {
+    	Map<Class<?>, String> temp = new HashMap<Class<?>, String>();
+        // asymmetric operators, op2 = !opm
+        temp.put(Contains.class, "SDO_INSIDE");
+        temp.put(Within.class, "SDO_CONTAINS");
+        // symmetric operators, op2 = op
+        temp.put(Crosses.class, "SDO_OVERLAPBDYDISJOINT");
+        temp.put(Equals.class, "SDO_EQUAL");
+        temp.put(Overlaps.class, "SDO_OVERLAPBDYINTERSECT");
+        temp.put(Touches.class, "SDO_TOUCH");
+        temp.put(Disjoint.class, "SDO_ANYINTERACT");
+        temp.put(BBOX.class, "SDO_ANYINTERACT");
+        temp.put(Intersects.class, "SDO_ANYINTERACT");
+        INVERSE_OPERATOR_MAP = Collections.unmodifiableMap(temp);
     };
 
     /**
@@ -283,25 +302,27 @@ public class OracleFilterToSQL extends PreparedFilterToSQL {
     protected void doSDORelate(Filter filter, Expression e1, Expression e2, boolean swapped, Object extraData) throws IOException {
         // grab the operating mask
         String mask = null;
-        for (Class filterClass : SDO_RELATE_MASK_MAP.keySet()) {
-            if(filterClass.isAssignableFrom(filter.getClass()))
-                mask = SDO_RELATE_MASK_MAP.get(filterClass);
+        Map<Class<?>, String> lookup = swapped ? INVERSE_OPERATOR_MAP : SDO_OPERATOR_MAP;
+        for (Map.Entry<Class<?>, String> entry : lookup.entrySet()) {
+        	if (entry.getKey().isAssignableFrom(filter.getClass())) {
+        		mask = entry.getValue();
+        		break;
+        	}
         }
         if(mask == null)
-            throw new IllegalArgumentException("Cannot encode filter " + filter.getClass() + " into a SDO_RELATE");
-        if(swapped)
-            mask = INVERSE_OPERATOR_MAP.get(mask);
+            throw new IllegalArgumentException("Cannot encode filter " + filter.getClass() + " into native Oracle operation");
         
         // ok, ready to write out the SDO_RELATE
-        out.write("SDO_RELATE(");
+        out.write(mask);
+        out.write("(");
         e1.accept(this, extraData);
         out.write(", ");
         e2.accept(this, extraData);
         // for disjoint we ask for no interaction, anyinteract == false
         if(filter instanceof Disjoint) {
-            out.write(", 'mask=ANYINTERACT querytype=WINDOW') <> 'TRUE' ");
+            out.write(") <> 'TRUE' ");
         } else {
-            out.write(", 'mask=" + mask + " querytype=WINDOW') = 'TRUE' ");
+            out.write(") = 'TRUE' ");
         }
     }
     

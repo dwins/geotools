@@ -63,7 +63,7 @@ public class OracleFilterToSqlTest extends TestCase {
         BBOX bbox = ff.bbox("GEOM", -180, -90, 180, 90, "ESPG:4326");
         String encoded = encoder.encodeToString(bbox);
         assertEquals(
-                "WHERE SDO_RELATE(\"GEOM\", ?, 'mask=anyinteract querytype=WINDOW') = 'TRUE' ",
+                "WHERE SDO_ANYINTERACT(\"GEOM\", ?) = 'TRUE' ",
                 encoded);
     }
     
@@ -78,7 +78,7 @@ public class OracleFilterToSqlTest extends TestCase {
         Contains contains = ff.contains(ff.property("SHAPE"), ff.literal(gf
                 .createPoint(new Coordinate(10.0, -10.0))));
         String encoded = encoder.encodeToString(contains);
-        assertEquals("WHERE SDO_RELATE(\"SHAPE\", ?, 'mask=contains querytype=WINDOW') = 'TRUE' ",
+        assertEquals("WHERE SDO_CONTAINS(\"SHAPE\", ?) = 'TRUE' ",
                 encoded);
     }
 
@@ -87,7 +87,7 @@ public class OracleFilterToSqlTest extends TestCase {
                 .createLineString(new Coordinate[] { new Coordinate(-10.0d, -10.0d),
                         new Coordinate(10d, 10d) })));
         String encoded = encoder.encodeToString(crosses);
-        assertEquals("WHERE SDO_RELATE(\"GEOM\", ?, 'mask=overlapbdydisjoint querytype=WINDOW') = 'TRUE' ", encoded);
+        assertEquals("WHERE SDO_OVERLAPBDYDISJOINT(\"GEOM\", ?) = 'TRUE' ", encoded);
     }
     
     public void testIntersectsFilter() throws Exception {
@@ -95,7 +95,7 @@ public class OracleFilterToSqlTest extends TestCase {
                 .createLineString(new Coordinate[] { new Coordinate(-10.0d, -10.0d),
                         new Coordinate(10d, 10d) })));
         String encoded = encoder.encodeToString(intersects);
-        assertEquals("WHERE SDO_RELATE(\"GEOM\", ?, 'mask=anyinteract querytype=WINDOW') = 'TRUE' ", encoded);
+        assertEquals("WHERE SDO_ANYINTERACT(\"GEOM\", ?) = 'TRUE' ", encoded);
     }
     
     public void testOverlapsFilter() throws Exception {
@@ -103,7 +103,7 @@ public class OracleFilterToSqlTest extends TestCase {
                 .createLineString(new Coordinate[] { new Coordinate(-10.0d, -10.0d),
                         new Coordinate(10d, 10d) })));
         String encoded = encoder.encodeToString(overlaps);
-        assertEquals("WHERE SDO_RELATE(\"GEOM\", ?, 'mask=overlapbdyintersect querytype=WINDOW') = 'TRUE' ", encoded);
+        assertEquals("WHERE SDO_OVERLAPBDYINTERSECT(\"GEOM\", ?) = 'TRUE' ", encoded);
     }
     
     public void testDWithinFilterWithUnit() throws Exception {
